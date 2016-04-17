@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>LowRezJam - Fonserbc</title>
+		<style>
+		canvas {
+			image-rendering: pixelated;
+			zoom: 700%;
+			display: block;
+		    position: absolute;
+		    left: 0;
+		    top: 0;
+		}
+
+		div#holder {
+			padding-left: 0;
+		    padding-right: 0;
+		    margin-left: auto;
+		    margin-right: auto;
+		    display: block;		    
+			position: relative;
+			width: 455px;
+			height: 455px;
+		}
+
+		div#footer {
+			margin: 0 auto;
+		}
+		</style>
+	</head>
+	<body>
+		<div id="holder">
+			<canvas id="canvas" width="64" height="64"></canvas>
+		</div>
+		<script type="text/javascript">
+			/*******************/
+			/** Asset Manager **/
+			/*******************/
+			function AssetManager() {
+				this.successCount = 0;
+				this.errorCount = 0;
+				this.cache = {};
+				this.downloadQueue = [];
+			}
+
+			AssetManager.prototype.queueDownload = function(path) {
+				this.downloadQueue.push(path);
+			}
+
+			AssetManager.prototype.downloadAll = function(downloadCallback) {
+				if (this.downloadQueue.length === 0) {
+					downloadCallback();
+				}
+
+				for (var i = 0; i < this.downloadQueue.length; i++) {
+					var path = this.downloadQueue[i];
+					var img = new Image();
+					var that = this;
+					img.addEventListener("load", function() {
+						console.log(this.src + ' is loaded');
+						that.successCount += 1;
+						if (that.isDone()) {
+							downloadCallback();
+						}
+					}, false);
+					img.addEventListener("error", function() {
+						that.errorCount += 1;
+						if (that.isDone()) {
+							downloadCallback();
+						}
+					}, false);
+					img.src = path;
+					this.cache[path] = img;
+				}
+			}
+
+			AssetManager.prototype.getAsset = function(path) {
+				return this.cache[path];
+			}
+
+			AssetManager.prototype.isDone = function() {
+				return ((this.downloadQueue.length) == this.successCount + this.errorCount);
+			}
+		</script>
+
+		<script type="text/javascript">
+			var WIDTH = 64;
+			var HEIGHT = 64;
+			var backgroundColor = "#272822";
+			var minPlayerColor = 100;
+			var player = {
+				x: WIDTH/2,
+				y: HEIGHT/2,
+				head: {x:0,y:0},
+				pos: [{x:0,y:0}],
+				get hx () {
+					return player.x + player.head.x;
+				},
+				get hy () {
+					return player.y + player.head.y;
+				}
+			};
+			var goal = {
+				x: 0,
+				y: 0,
+				color: "#33cc33"
+			};
+			var boxes = {
+				color: "#cca300",
+				pos: []
+			};
+			var undos = [];
+			var collisionMap = [];
+			var objects = [];
+
+			var canvas = document.getElementById("canvas");
+			var ctx = canvas.getContext("2d");
+
+			/*******************/
+			/****** Input ******/
+			/*******************/
+			var couldntMove = false;
+			var pressedKeys = {};
+			function keydown(e) {
+				e = e || window.event;
+
+				//if (pressedKeys[e.keyCode]) return;
+				pressedKeys[e.keyCode] = true;
+
+				if (e.keyCode == '38' || e.keyCode == '87') {
+					// up arrow
+					move(0,-1);
+				}
+
+				else if (e.keyCode == '40' || e.keyCode == '83') {
+					// down arrow
+					move(0,1);
+				}
+				else if (e.keyCode == '37' || e.keyCode == '65') {
+					// left arrow
+					move(-1,0);
+				}
+				else if (e.keyCode == '39' || e.keyCode == '68') {
+					// right arrow
+					move(1,0);
+				}
+				else if (e.keyCode == '82') {
+					// r
+					reset();
+				}
+				else if (e.keyCode == '90') {
+					// z
+					undo();
+				}
+
+				redraw();
+			}
+
+			function keyup (e) {
+				e = e || window.event;
+				pressedKeys[e.keyCode] = false;
+				couldntMove = false;
+				redraw();
+			}
+			document.onkeydown = keydown;
+			document.onkeyup = keyup;
+
+			/*******************/
+			/****** Logic ******/
+			/*******************/
+			function redraw() {
+				ctx.fillStyle = backgroundColor;
+				ctx.fillRect(0,0,WIDTH,HEIGHT);
+
+				for (var i = 0; i < player.pos.length; ++i) {
+					var color = Math.min(255, Math.max(minPlayerColor, 255 - player.pos.length*2 + i*2));
+					ctx.fillStyle = "rgb("+color+","+color+","+color+")";
+					ctx.fillRect(player.x + player.pos[i].x, player.y + player.pos[i].y,1,1);
+				}
+
+				ctx.fillStyle = goal.color;
+				ctx.fillRect(goal.x, goal.y,1,1);
+
+				ctx.fillStyle = boxes.color;
+				for (var i = 0; i < boxes.pos.length; ++i) {
+					ctx.fillRect(boxes.pos[i].x, boxes.pos[i].y,1,1);
+				}
+
+				if (couldntMove) {
+					ctx.fillStyle = "rgb(255,42,2)";
+					ctx.fillRect(player.hx, player.hy,1,1);
+				}
+			}
+
+			function move (dx, dy) {
+				if (canMove(player.hx + dx, player.hy + dy, dx, dy, false)) {
+					undos.push({
+						x: player.x,
+						y: player.y,
+						head: {x: player.head.x, y: player.head.y},
+						pushes: []
+					});
+
+					player.head.x += dx;
+					player.head.y += dy;
+					player.pos.push({x: player.head.x, y: player.head.y});
+
+					if (pushAnything(player.hx, player.hy, dx, dy)) {
+						return; // won
+					}
+					collisionMap[player.hx][player.hy] = 0;
+
+					if (canDisplacePlayer(dx, dy)) {
+						displacePlayer(dx, dy);
+					}
+				}
+				else {
+					couldntMove = true;
+				}
+			}
+
+			function pushAnything (x, y, dx, dy) {
+				var what = collisionMap[x][y];
+				if (x + dx < 0 || y + dy < 0 || x + dx >= WIDTH || y + dy >= HEIGHT) return false;
+				if (what == 1 && player.hx == x && player.hy == y) {
+					loadLevel(level + 1);
+					return true;
+				}
+				if (what != -1 && what != 0) {
+					if (collisionMap[x+dx][y+dy] != -1) {
+						pushAnything(x+dx, y+dy, dx, dy);
+					}
+					collisionMap[x+dx][y+dy] = what;
+					objects[what].x += dx;
+					objects[what].y += dy;
+					collisionMap[x][y] = -1;
+
+					undos[undos.length - 1].pushes.push({x: x, y: y, who: what});
+				}
+				return false;
+			}
+
+			function canDisplacePlayer(dx, dy){
+				for (var i = 0; i < player.pos.length; ++i) {
+					if (!canMove(player.x + player.pos[i].x + dx, player.y + player.pos[i].y + dy, dx, dy, true)) {
+						//console.log(player.x + player.pos[i].x, pplayer.y + player.pos[i].y);
+						return false;
+					}
+				}
+				return true;
+			}
+
+			function displacePlayer(dx, dy) {
+				for (var i = 0; i < player.pos.length; ++i) {
+					collisionMap[player.x + player.pos[i].x][player.y + player.pos[i].y] = -1;
+				}
+
+				player.x += dx;
+				player.y += dy;
+
+				for (var i = 0; i < player.pos.length; ++i) {
+					if (pushAnything(player.x + player.pos[i].x, player.y + player.pos[i].y, dx, dy)) {
+						return;//won
+					}
+					collisionMap[player.x + player.pos[i].x][player.y + player.pos[i].y] = 0;
+				}
+			}
+
+			function canMove(x, y, dx, dy, indirect) {
+
+				if (x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) return false;
+
+				if (collisionMap[x][y] == -1) return true;
+				if (collisionMap[x][y] == 1) return true;
+				if (collisionMap[x][y] == 0) return indirect;
+
+				if (x + dx < 0 || y + dy < 0 || x + dx >= WIDTH || y + dy >= HEIGHT) return false;
+
+				if (collisionMap[x+dx][y+dy] == -1) return true;
+				//if (collisionMap[x+dx][y+dy] == 0) return indirect;
+				else return indirect && (player.hx != x - dx || player.hy != y - dy);
+				//return false;
+			}
+
+			function reset() {
+				loadLevel(level);
+			}
+
+			function undo () {
+				if (undos.length > 0) {
+					var undo = undos.pop();
+
+					player.x = undo.x;
+					player.y = undo.y;
+					player.head.x = undo.head.x;
+					player.head.y = undo.head.y;
+					player.pos.pop();
+
+					for (var i = undo.pushes.length - 1; i >= 0; --i) {
+						var p = undo.pushes[i];
+						objects[p.who].x = p.x;
+						objects[p.who].y = p.y;
+					}
+
+					recalculateCollisionMap();
+				}
+			}
+
+			var levelData;
+			var level = 0;
+			function loadLevel(map) {
+				level = map % assetManager.downloadQueue.length;
+				ctx.drawImage(assetManager.getAsset(assetManager.downloadQueue[level]), 0, 0);
+
+				levelData = ctx.getImageData(0,0,WIDTH,HEIGHT);
+				
+				boxes.pos = [];
+				objects = [];
+
+				objects.push(player);
+				objects.push(goal);
+
+				var length = levelData.height * levelData.width * 4;
+				for (var i = 0; i < length; i += 4) {
+					if (levelData.data[i] == 0 && levelData.data[i+1] == 255 && levelData.data[i+2] == 0 && levelData.data[i+3] == 255) { // Green
+						goal.y = Math.floor(i/4/WIDTH);
+						goal.x = (i/4)%WIDTH;
+					}
+					if (levelData.data[i] == 0 && levelData.data[i+1] == 0 && levelData.data[i+2] == 255 && levelData.data[i+3] == 255) { // Blue
+						player.y = Math.floor(i/4/WIDTH);
+						player.x = (i/4)%WIDTH;
+					}
+					if (levelData.data[i] == 0 && levelData.data[i+1] == 0 && levelData.data[i+2] == 0 && levelData.data[i+3] == 255) { // BLACK
+						var box = {
+							x: (i/4)%WIDTH,
+							y: Math.floor(i/4/WIDTH)
+						};
+
+						boxes.pos.push(box);
+						objects.push(box)
+					}
+				}
+
+				player.head.x = 0;
+				player.head.y = 0;
+				player.pos = [{x:0,y:0}];
+
+				undos.length = 0;
+
+				recalculateCollisionMap();
+
+				redraw();
+			}
+
+			function recalculateCollisionMap() {
+				collisionMap.length = 0;
+				collisionMap = new Array(WIDTH);
+				for (var i = 0; i < WIDTH; ++i) {
+					collisionMap[i] = new Array(HEIGHT);
+
+					for (var j = 0; j < HEIGHT; ++j) {
+						collisionMap[i][j] = -1;
+					}
+				}
+
+				for (var i = 0; i < player.pos.length; ++i) {
+					collisionMap[player.x + player.pos[i].x][player.y + player.pos[i].y] = 0;
+				}
+
+				collisionMap[goal.x][goal.y] = 1;
+
+				for (var i = 2; i < objects.length; ++i) {
+					collisionMap[objects[i].x][objects[i].y] = i;
+				}
+			}
+
+
+			assetManager = new AssetManager();
+			assetManager.downloadQueue = ["level0.png", "level1.png", "level2.png", "levelEnd.png"];
+
+			ctx.fillStyle = "#000";
+			ctx.fillRect(0,0,WIDTH,HEIGHT);
+
+			assetManager.downloadAll(function() {				
+				loadLevel(2);
+			});
+
+		</script>
+	</body>	
+</html>
