@@ -58,7 +58,7 @@
 					var img = new Image();
 					var that = this;
 					img.addEventListener("load", function() {
-						console.log(this.src + ' is loaded');
+						//console.log(this.src + ' is loaded');
 						that.successCount += 1;
 						if (that.isDone()) {
 							downloadCallback();
@@ -377,13 +377,13 @@
 
 
 			assetManager = new AssetManager();
-			assetManager.downloadQueue = ["level0.png", "level1.png", "level2.png", "levelEnd.png"];
+			assetManager.downloadQueue = ["level0.png", "level4.png", "level1.png", "level5.png", "level3.png", "level2.png", "levelEnd.png"];
 
 			ctx.fillStyle = "#000";
 			ctx.fillRect(0,0,WIDTH,HEIGHT);
 
 			assetManager.downloadAll(function() {				
-				loadLevel(2);
+				loadLevel(0);
 			});
 
 		</script>
