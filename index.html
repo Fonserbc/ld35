@@ -6,7 +6,8 @@
 		<style>
 		canvas {
 			image-rendering: pixelated;
-			zoom: 700%;
+	        -ms-interpolation-mode: nearest-neighbor;  /* IE (non-standard property) */
+			/*zoom: 700%;*/
 			display: block;
 		    position: absolute;
 		    left: 0;
@@ -31,7 +32,7 @@
 	</head>
 	<body>
 		<div id="holder">
-			<canvas id="canvas" width="64" height="64"></canvas>
+			<canvas id="canvas" width="455" height="455"></canvas>
 		</div>
 		<script type="text/javascript">
 			/*******************/
@@ -85,6 +86,7 @@
 		</script>
 
 		<script type="text/javascript">
+			var SCALE = 7;
 			var WIDTH = 64;
 			var HEIGHT = 64;
 			var backgroundColor = "#272822";
@@ -171,25 +173,25 @@
 			/*******************/
 			function redraw() {
 				ctx.fillStyle = backgroundColor;
-				ctx.fillRect(0,0,WIDTH,HEIGHT);
+				ctx.fillRect(0,0,WIDTH*SCALE,HEIGHT*SCALE);
 
 				for (var i = 0; i < player.pos.length; ++i) {
 					var color = Math.min(255, Math.max(minPlayerColor, 255 - player.pos.length*2 + i*2));
 					ctx.fillStyle = "rgb("+color+","+color+","+color+")";
-					ctx.fillRect(player.x + player.pos[i].x, player.y + player.pos[i].y,1,1);
+					ctx.fillRect((player.x + player.pos[i].x)*SCALE, (player.y + player.pos[i].y)*SCALE,1*SCALE,1*SCALE);
 				}
 
 				ctx.fillStyle = goal.color;
-				ctx.fillRect(goal.x, goal.y,1,1);
+				ctx.fillRect(goal.x*SCALE, goal.y*SCALE,1*SCALE,1*SCALE);
 
 				ctx.fillStyle = boxes.color;
 				for (var i = 0; i < boxes.pos.length; ++i) {
-					ctx.fillRect(boxes.pos[i].x, boxes.pos[i].y,1,1);
+					ctx.fillRect(boxes.pos[i].x*SCALE, boxes.pos[i].y*SCALE,1*SCALE,1*SCALE);
 				}
 
 				if (couldntMove) {
 					ctx.fillStyle = "rgb(255,42,2)";
-					ctx.fillRect(player.hx, player.hy,1,1);
+					ctx.fillRect(player.hx*SCALE, player.hy*SCALE,1*SCALE,1*SCALE);
 				}
 			}
 
@@ -377,10 +379,10 @@
 
 
 			assetManager = new AssetManager();
-			assetManager.downloadQueue = ["level0.png", "level4.png", "level1.png", "level5.png", "level3.png", "level2.png", "levelEnd.png"];
+			assetManager.downloadQueue = ["level0.png", "level4.png", "level1.png", "level5.png", "level2.png", "level3.png", "levelEnd.png"];
 
 			ctx.fillStyle = "#000";
-			ctx.fillRect(0,0,WIDTH,HEIGHT);
+			ctx.fillRect(0,0,WIDTH*SCALE,HEIGHT*SCALE);
 
 			assetManager.downloadAll(function() {				
 				loadLevel(0);
