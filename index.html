@@ -90,7 +90,7 @@
 			var WIDTH = 64;
 			var HEIGHT = 64;
 			var backgroundColor = "#272822";
-			var minPlayerColor = 100;
+			var minPlayerColor = 128;
 			var player = {
 				x: WIDTH/2,
 				y: HEIGHT/2,
@@ -106,7 +106,7 @@
 			var goal = {
 				x: 0,
 				y: 0,
-				color: "#33cc33"
+				color: "#33ff55"
 			};
 			var boxes = {
 				color: "#cca300",
@@ -133,11 +133,13 @@
 				if (e.keyCode == '38' || e.keyCode == '87') {
 					// up arrow
 					move(0,-1);
+					e.preventDefault();
 				}
 
 				else if (e.keyCode == '40' || e.keyCode == '83') {
 					// down arrow
 					move(0,1);
+					e.preventDefault();
 				}
 				else if (e.keyCode == '37' || e.keyCode == '65') {
 					// left arrow
